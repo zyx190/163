@@ -13,7 +13,7 @@ $classifications = getClassificationData();
         </div>
         <div class="form-item">
             <label for="match_keywords">关键词 (以逗号分隔):</label>
-            <textarea id="match_keywords" name="match_keywords" rows="1" cols="50"></textarea>
+            <textarea id="match_keywords" name="match_keywords" rows="1" cols="100"></textarea>
         </div>
         <div class="form-item">
             <button type="submit" id="submitBtn" class="btn-primary">添加分类</button>
