@@ -55,16 +55,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         CREATE TABLE IF NOT EXISTS verification_data (
             code VARCHAR(50) PRIMARY KEY,
+            phonenumber VARCHAR(50),
             category VARCHAR(100),
-            host VARCHAR(100),
-            port VARCHAR(10),
-            user VARCHAR(100),
-            pass VARCHAR(100),
-            match_sender TEXT,
-            match_keywords TEXT,
             releasedate VARCHAR(50),
             expirationtime VARCHAR(50),
-            combination VARCHAR(255),
             is_expired TINYINT(1) DEFAULT 0
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ";
