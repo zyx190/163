@@ -23,11 +23,7 @@
             <label for="username">当前管理员账号名</label>
             <input type="text" id="username" name="username" value="<?= htmlspecialchars($_SESSION['username'] ?? '') ?>" required placeholder="请输入账号名" style="width: 100%;">
         </div>
-        <div class="form-item" style="margin-bottom: 20px;">
-            <label for="domain">域名配置 (用于接码组合内容)</label>
-            <input type="text" id="domain" name="domain" value="<?= htmlspecialchars($_SESSION['domain'] ?? '') ?>" placeholder="例如：http://xxx.xxx/" style="width: 100%;">
-        </div>
-
+        
         <div class="form-item" style="margin-bottom: 20px;">
             <label for="new_password">新密码 (如果不修改密码请留空)</label>
             <input type="password" id="new_password" name="new_password" placeholder="请输入新密码" style="width: 100%;">
@@ -36,6 +32,16 @@
         <div class="form-item" style="margin-bottom: 25px;">
             <label for="confirm_password">确认新密码</label>
             <input type="password" id="confirm_password" name="confirm_password" placeholder="请再次输入新密码" style="width: 100%;">
+        </div>
+
+        <div class="form-item" style="margin-bottom: 20px;">
+            <label for="domain">域名配置 (用于接码组合内容)</label>
+            <input type="text" id="domain" name="domain" value="<?= htmlspecialchars($_SESSION['domain'] ?? '') ?>" placeholder="例如：http://xxx.xxx/" style="width: 100%;">
+        </div>
+        
+        <div class="form-item" style="margin-bottom: 20px;">
+            <label for="global_prefix">自定义全接字符 (用于全接收功能的链接前缀)</label>
+            <input type="text" id="global_prefix" name="global_prefix" value="<?= htmlspecialchars($_SESSION['global_prefix'] ?? '') ?>" placeholder="例如：zdy" style="width: 100%;">
         </div>
 
         <div class="form-item">
