@@ -221,6 +221,7 @@ if ($action === 'system_settings_save') {
         $new_password = $_POST['new_password'];
         $confirm_password = $_POST['confirm_password'];
         $new_domain = trim($_POST['domain'] ?? '');
+        $new_global_prefix = trim($_POST['global_prefix'] ?? '');
         $user_id = $_SESSION['user_id']; 
 
         if (empty($new_username)) {
@@ -232,13 +233,14 @@ if ($action === 'system_settings_save') {
             try {
                 if (!empty($new_password)) {
                     $hashed_pass = password_hash($new_password, PASSWORD_DEFAULT);
-                    $stmt = $pdo->prepare("UPDATE admin_users SET username = ?, password = ?, domain = ? WHERE id = ?");
-                    $stmt->execute([$new_username, $hashed_pass, $new_domain, $user_id]);
+                    $stmt = $pdo->prepare("UPDATE admin_users SET username = ?, password = ?, domain = ?, global_prefix = ? WHERE id = ?");
+                    $stmt->execute([$new_username, $hashed_pass, $new_domain, $new_global_prefix, $user_id]);
                 } else {
-                    $stmt = $pdo->prepare("UPDATE admin_users SET username = ?, domain = ? WHERE id = ?");
-                    $stmt->execute([$new_username, $new_domain, $user_id]);
+                    $stmt = $pdo->prepare("UPDATE admin_users SET username = ?, domain = ?, global_prefix = ? WHERE id = ?");
+                    $stmt->execute([$new_username, $new_domain, $new_global_prefix, $user_id]);
                 }
                 $_SESSION['domain'] = $new_domain;
+                $_SESSION['global_prefix'] = $new_global_prefix;
                 $_SESSION['username'] = $new_username; 
                 $_SESSION['success_message'] = "系统设置修改成功！";
             } catch (PDOException $e) {
