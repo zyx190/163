@@ -23,6 +23,10 @@
             <label for="username">当前管理员账号名</label>
             <input type="text" id="username" name="username" value="<?= htmlspecialchars($_SESSION['username'] ?? '') ?>" required placeholder="请输入账号名" style="width: 100%;">
         </div>
+        <div class="form-item" style="margin-bottom: 20px;">
+            <label for="domain">域名配置 (用于接码组合内容)</label>
+            <input type="text" id="domain" name="domain" value="<?= htmlspecialchars($_SESSION['domain'] ?? '') ?>" placeholder="例如：http://xxx.xxx/" style="width: 100%;">
+        </div>
 
         <div class="form-item" style="margin-bottom: 20px;">
             <label for="new_password">新密码 (如果不修改密码请留空)</label>
