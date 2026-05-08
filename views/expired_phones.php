@@ -34,10 +34,6 @@ if (isset($_SESSION['success_message'])) {
             <input type="text" id="verification_code" name="verification_code" required>
         </div>
         <div class="form-item">
-            <label for="user_content">输入填写的内容:</label>
-            <input type="text" id="user_content" name="user_content">
-        </div>
-        <div class="form-item">
             <label for="days_to_expire">到期天数:</label>
             <input type="text" id="days_to_expire" name="days_to_expire" value="1" required>
         </div>
@@ -249,7 +245,6 @@ if (isset($_SESSION['success_message'])) {
         const categoryNameSelect = document.getElementById('category_name');
         const phonenumberInput = document.getElementById('phonenumber');
         const verificationCodeInput = document.getElementById('verification_code');
-        const userContentInput = document.getElementById('user_content');
         const daysToExpireInput = document.getElementById('days_to_expire');
         const submitBtn = document.getElementById('submitBtn');
 
@@ -259,9 +254,6 @@ if (isset($_SESSION['success_message'])) {
                 const originalCode = row.querySelector('.code-cell').textContent;
                 const originalCategory = row.querySelector('.category-cell').textContent;
                 const originalPhoneNumber = row.querySelector('.phonenumber-cell').textContent;
-                const originalUserContentAndCode = row.querySelector('.combination-cell').textContent.split('---')[1] || '';
-                const lastSlashIndex = originalUserContentAndCode.lastIndexOf('/');
-                const originalUserContent = lastSlashIndex !== -1 ? originalUserContentAndCode.substring(0, lastSlashIndex) : '';
                 const originalDaysToExpire = row.querySelector('td:nth-child(6)').textContent.replace('天', '');
                 
                 originalCodeInput.value = originalCode;
@@ -277,7 +269,6 @@ if (isset($_SESSION['success_message'])) {
 
                 phonenumberInput.value = originalPhoneNumber;
                 verificationCodeInput.value = originalCode;
-                userContentInput.value = originalUserContent;
                 daysToExpireInput.value = originalDaysToExpire;
                 
                 window.scrollTo({ top: 0, behavior: 'smooth' });
