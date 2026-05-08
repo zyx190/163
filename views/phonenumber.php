@@ -13,7 +13,7 @@ $phonenumbers = getPhoneNumberData();
         </div>
         <div class="form-item">
             <label for="port">Port:</label>
-            <input type="text" id="port" name="port" value="995">
+            <input type="text" id="port" name="port">
         </div>
         <div class="form-item">
             <label for="user">邮箱 (user):</label>
