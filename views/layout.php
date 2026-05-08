@@ -42,9 +42,6 @@
                 <li class="<?php echo ($current_action === 'code_manager') ? 'active' : ''; ?>">
                     <a href="admin.php?action=code_manager"><i class="fas fa-tasks"></i> 查询码管理</a>
                 </li>
-                <li class="<?php echo ($current_action === 'expired_phones') ? 'active' : ''; ?>">
-                    <a href="admin.php?action=expired_phones"><i class="fas fa-history"></i> 已过期电话</a>
-                </li>
 
                 <li class="sidebar-menu-item <?php echo ($current_action === 'verification_code_list') ? 'active' : ''; ?>">
                     <a href="#" id="toggle-submenu">
