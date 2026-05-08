@@ -117,15 +117,19 @@ if (isset($_SESSION['bulk_add_success_details'])) {
     
     <div class="toolbar">
         <button type="submit" form="bulkActionsForm" formaction="admin.php?action=verification_code_bulk_delete" onclick="return confirm('确定要删除所选数据吗？')" class="btn-danger">批量删除</button>
-        <button type="submit" form="bulkActionsForm" formaction="admin.php?action=verification_code_bulk_update" onclick="return confirm('确定要更新所选数据吗？')" class="btn-primary">批量更新</button>
-        <button type="submit" form="bulkActionsForm" formaction="admin.php?action=verification_code_bulk_move" onclick="return confirm('确定要移动所选数据到过期列表吗？')" class="btn-warning">批量移动</button>
         <button type="submit" form="bulkActionsForm" formaction="admin.php?action=export_selected_combinations" class="btn-info">批量导出</button>
         <a href="admin.php?action=export_all_combinations" class="btn-info">导出所有</a>
-        <a href="admin.php?action=verification_code_move_expired" class="btn-warning" onclick="return confirm('确定要将所有过期数据移动到过期列表吗？')">移动所有过期</a>
-        <a href="admin.php?action=verification_code_sync" class="btn-success" onclick="return confirm('确定要更新所有已添加的数据吗？')">更新所有数据</a>
         
         <form method="GET" action="admin.php" class="search-form">
             <input type="hidden" name="action" value="verification_code">
+            <select name="filter_days" onchange="this.form.submit()" style="height:32px; border:1px solid #dcdfe6; border-radius:4px; margin-right:5px;">
+                <option value="">全部状态</option>
+                <option value="expired" <?php echo ($_GET['filter_days']??'')==='expired'?'selected':''; ?>>已过期</option>
+                <option value="3" <?php echo ($_GET['filter_days']??'')==='3'?'selected':''; ?>>3天</option>
+                <option value="10" <?php echo ($_GET['filter_days']??'')==='10'?'selected':''; ?>>10天</option>
+                <option value="20" <?php echo ($_GET['filter_days']??'')==='20'?'selected':''; ?>>20天</option>
+                <option value="30" <?php echo ($_GET['filter_days']??'')==='30'?'selected':''; ?>>30天</option>
+            </select>
             <input type="text" id="searchInput" name="search_term" placeholder="搜索..." value="<?php echo htmlspecialchars($_GET['search_term'] ?? ''); ?>">
             <button type="submit" class="btn-primary">搜索</button>
             <?php if (isset($_GET['search_term']) && !empty($_GET['search_term'])): ?>
