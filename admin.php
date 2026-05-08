@@ -49,7 +49,6 @@ $allowedActions = [
     'verification_code_bulk_save' => null,
     'verification_code_bulk_move' => null,
     'verification_code_move_expired' => null,
-    'verification_code_update_all_content' => null,
     'expired_phones_bulk_delete' => null,
     'expired_phones_delete' => null,
     'expired_phones_edit' => null,
@@ -216,7 +215,6 @@ if ($action === 'verification_code_bulk_save') {
         $lines = explode("\n", $_POST['bulk_data']);
         $categoryName = $_POST['bulk_category_name'];
         $daysToExpire = (float)($_POST['bulk_days_to_expire'] ?? 0);
-        $user_content = $_POST['bulk_user_content'] ?? '';
         
         $pdo = Db::get();
         // 获取分类
@@ -270,7 +268,8 @@ if ($action === 'verification_code_bulk_save') {
                 }
                 
                 $matchedPhoneNumber = $phones[$phonenumber];
-                $combination = $phonenumber . '---' . $user_content . '/' . $verification_code;
+                $domain = $_SESSION['domain'] ?? '';
+                $combination = $phonenumber . '---' . $domain . $verification_code;
                 $releasedate = (new DateTime())->format('Y-m-d H:i:s');
                 $expirationtime = $daysToExpire . '天';
 
@@ -336,7 +335,8 @@ if ($action === 'verification_code_edit') {
         $match_keywords = $stmt->fetchColumn();
 
         if ($matchedPhoneNumber) {
-            $combination = $newPhoneNumber . '---' . ($_POST['user_content'] ?? '') . '/' . $newCode;
+            $domain = $_SESSION['domain'] ?? '';
+            $combination = $newPhoneNumber . '---' . $domain . $newCode;
             $expirationtime = ((float)($_POST['days_to_expire'] ?? 0)) . '天';
             $releasedate = (new DateTime())->format('Y-m-d H:i:s');
 
@@ -384,6 +384,7 @@ if ($action === 'system_settings_save') {
         $new_username = trim($_POST['username']);
         $new_password = $_POST['new_password'];
         $confirm_password = $_POST['confirm_password'];
+        $new_domain = trim($_POST['domain'] ?? '');
         $user_id = $_SESSION['user_id']; // 从登录 session 中获取当前管理员ID
 
         if (empty($new_username)) {
@@ -395,12 +396,13 @@ if ($action === 'system_settings_save') {
             try {
                 if (!empty($new_password)) {
                     $hashed_pass = password_hash($new_password, PASSWORD_DEFAULT);
-                    $stmt = $pdo->prepare("UPDATE admin_users SET username = ?, password = ? WHERE id = ?");
-                    $stmt->execute([$new_username, $hashed_pass, $user_id]);
+                    $stmt = $pdo->prepare("UPDATE admin_users SET username = ?, password = ?, domain = ? WHERE id = ?");
+                    $stmt->execute([$new_username, $hashed_pass, $new_domain, $user_id]);
                 } else {
-                    $stmt = $pdo->prepare("UPDATE admin_users SET username = ? WHERE id = ?");
-                    $stmt->execute([$new_username, $user_id]);
+                    $stmt = $pdo->prepare("UPDATE admin_users SET username = ?, domain = ? WHERE id = ?");
+                    $stmt->execute([$new_username, $new_domain, $user_id]);
                 }
+                $_SESSION['domain'] = $new_domain;
                 $_SESSION['username'] = $new_username; // 更新session中的名字
                 $_SESSION['success_message'] = "系统设置修改成功！";
             } catch (PDOException $e) {
@@ -620,7 +622,8 @@ if ($action === 'verification_code_save') {
         $matchedClassification = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($matchedClassification) {
-            $combination = $matchedPhoneNumber['phonenumber'] . '---' . $_POST['user_content'] . '/' . $verification_code;
+            $domain = $_SESSION['domain'] ?? '';
+            $combination = $matchedPhoneNumber['phonenumber'] . '---' . $domain . $verification_code;
             $releasedate = (new DateTime())->format('Y-m-d H:i:s');
             $expirationtime = ((float)$_POST['days_to_expire']) . '天';
 
@@ -675,39 +678,6 @@ if ($action === 'verification_code_bulk_delete') {
 // =========================================================================
 // 接码数据的高级同步与更新操作
 // =========================================================================
-
-// 1. 一键更新所有接码数据的“输入填写的内容”
-if ($action === 'verification_code_update_all_content') {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_all_user_content'])) {
-        $new_content = $_POST['update_all_user_content'];
-        $pdo = Db::get();
-        $stmt = $pdo->query("SELECT code, combination FROM verification_data");
-        $updateStmt = $pdo->prepare("UPDATE verification_data SET combination = ? WHERE code = ?");
-        
-        $pdo->beginTransaction();
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $original_combination = $row['combination'] ?? '';
-            $phone_and_content = explode('---', $original_combination, 2);
-            $phone_number = $phone_and_content[0];
-            $content_and_code = $phone_and_content[1] ?? '';
-            $last_slash_pos = strrpos($content_and_code, '/');
-            
-            $verification_code_from_combo = ($last_slash_pos !== false) ? substr($content_and_code, $last_slash_pos + 1) : '';
-            
-            if (!empty($phone_number) && !empty($verification_code_from_combo)) {
-                $new_combo = $phone_number . '---' . $new_content . '/' . $verification_code_from_combo;
-                $updateStmt->execute([$new_combo, $row['code']]);
-            }
-        }
-        $pdo->commit();
-        $_SESSION['success_message'] = '已成功更新所有接码数据的“输入填写的内容”。';
-    } else {
-        $_SESSION['error_message'] = '未能获取要更新的内容。';
-    }
-    header('Location: admin.php?action=verification_code');
-    exit;
-}
-
 // 2. 一键同步所有接码数据（当修改了电话密码或分类关键字后，一键同步到已生成的接码数据中）
 if ($action === 'verification_code_sync') {
     $pdo = Db::get();
