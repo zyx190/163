@@ -23,9 +23,6 @@ unset($_SESSION['bulk_category_to_retain']);
 $retained_bulk_days = isset($_SESSION['bulk_days_to_expire_to_retain']) ? htmlspecialchars($_SESSION['bulk_days_to_expire_to_retain']) : '1';
 unset($_SESSION['bulk_days_to_expire_to_retain']);
 
-$retained_bulk_user_content = isset($_SESSION['bulk_user_content_to_retain']) ? htmlspecialchars($_SESSION['bulk_user_content_to_retain']) : '';
-unset($_SESSION['bulk_user_content_to_retain']);
-
 // 处理成功弹窗数据
 $success_details = null;
 if (isset($_SESSION['bulk_add_success_details'])) {
@@ -72,10 +69,6 @@ if (isset($_SESSION['bulk_add_success_details'])) {
             <input type="text" id="verification_code" name="verification_code" placeholder="留空则自动生成10位查询码">
         </div>
         <div class="form-item">
-            <label for="user_content">输入填写的内容:</label>
-            <input type="text" id="user_content" name="user_content">
-        </div>
-        <div class="form-item">
             <label for="days_to_expire">到期天数:</label>
             <input type="text" id="days_to_expire" name="days_to_expire" value="1" required>
         </div>
@@ -106,12 +99,7 @@ if (isset($_SESSION['bulk_add_success_details'])) {
                 <label for="bulk_days_to_expire">到期天数:</label>
                 <input type="text" id="bulk_days_to_expire" name="bulk_days_to_expire" value="<?php echo $retained_bulk_days; ?>" required>
             </div>
-            
-            <div class="form-item-horizontal">
-                <label for="bulk_user_content">批量输入填写内容:</label>
-                <input type="text" id="bulk_user_content" name="bulk_user_content" value="<?php echo $retained_bulk_user_content; ?>">
-            </div>
-            
+
             <button type="submit" id="bulkSubmitBtn" class="btn-primary" style="width: 100%; margin-top: 5px; height: 36px;">批量保存</button>
         </div>
 
@@ -143,14 +131,6 @@ if (isset($_SESSION['bulk_add_success_details'])) {
             <?php if (isset($_GET['search_term']) && !empty($_GET['search_term'])): ?>
                 <a href="admin.php?action=verification_code" class="btn-default">清空</a>
             <?php endif; ?>
-        </form>
-    </div>
-    
-    <div class="toolbar" style="margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px;">
-        <form method="POST" action="admin.php?action=verification_code_update_all_content" onsubmit="return confirm('这是一个全局操作，将更新所有接码数据的“输入填写的内容”，确定要继续吗？');" class="flex-wrap-form">
-            <label for="update_all_user_content" style="min-width: auto; margin-bottom: 0;">更新所有“输入填写的内容”为:</label>
-            <input type="text" name="update_all_user_content" required class="flex-auto-input">
-            <button type="submit" class="btn-primary">更新全部内容</button>
         </form>
     </div>
 
@@ -411,7 +391,6 @@ if (isset($_SESSION['bulk_add_success_details'])) {
         const categoryNameSelect = document.getElementById('category_name');
         const phonenumberInput = document.getElementById('phonenumber');
         const verificationCodeInput = document.getElementById('verification_code');
-        const userContentInput = document.getElementById('user_content');
         const daysToExpireInput = document.getElementById('days_to_expire');
         const submitBtn = document.getElementById('submitBtn');
 
@@ -421,9 +400,6 @@ if (isset($_SESSION['bulk_add_success_details'])) {
                 const originalCode = row.querySelector('.code-cell').textContent.trim();
                 const originalCategory = row.querySelector('.category-cell').textContent.replace('(已过期)', '').trim();
                 const originalPhoneNumber = row.querySelector('.phonenumber-cell').textContent.trim();
-                const originalUserContentAndCode = row.querySelector('.combination-cell').textContent.split('---')[1] || '';
-                const lastSlashIndex = originalUserContentAndCode.lastIndexOf('/');
-                const originalUserContent = lastSlashIndex !== -1 ? originalUserContentAndCode.substring(0, lastSlashIndex) : '';
                 const originalDaysToExpire = row.querySelector('.expirationtime-cell').textContent.replace('天', '').trim();
                 
                 if(originalCodeInput) originalCodeInput.value = originalCode;
@@ -442,7 +418,6 @@ if (isset($_SESSION['bulk_add_success_details'])) {
                 
                 if(phonenumberInput) phonenumberInput.value = originalPhoneNumber;
                 if(verificationCodeInput) verificationCodeInput.value = originalCode;
-                if(userContentInput) userContentInput.value = originalUserContent;
                 if(daysToExpireInput) daysToExpireInput.value = originalDaysToExpire;
                 
                 window.scrollTo({ top: 0, behavior: 'smooth' });
