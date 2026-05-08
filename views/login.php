@@ -24,18 +24,18 @@
         <form method="post" action="admin.php?action=login">
             <div class="form-item" style="margin-bottom:15px; width:100%;">
                 <label for="username">用户名</label>
-                <input type="text" id="username" name="username" required autocomplete="username" placeholder="请输入管理员账号">
+                <input type="text" id="username" name="username" required autocomplete="username" placeholder="请输入管理员账号" style="height: 39px;">
             </div>
             
             <div class="form-item" style="margin-bottom:15px; width:100%;">
                 <label for="password">密码</label>
-                <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="请输入密码">
+                <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="请输入密码" style="height: 39px;">
             </div>
             
             <div class="form-item" style="margin-bottom:20px; width:100%;">
                 <label for="captcha">验证码</label>
                 <div class="captcha-container">
-                    <input type="text" id="captcha" name="captcha" required autocomplete="off" placeholder="验证码" style="flex:1;">
+                    <input type="text" id="captcha" name="captcha" required autocomplete="off" placeholder="验证码" style="flex:1; height: 39px;">
                     <img src="captcha.php" alt="验证码" onclick="this.src='captcha.php?'+Math.random();" title="点击刷新验证码">
                 </div>
             </div>
