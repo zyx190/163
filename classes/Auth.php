@@ -21,6 +21,7 @@ class Auth {
             $_SESSION['logged_in'] = true;
             $_SESSION['username'] = $user['username'];
             $_SESSION['user_id'] = $user['id'];
+            $_SESSION['domain'] = $user['domain'] ?? '';
             $_SESSION['login_attempts'] = 0;
             unset($_SESSION['login_locked_until']);
             return true;
