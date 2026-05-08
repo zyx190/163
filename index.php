@@ -50,13 +50,43 @@ try {
 
     // 2. 从 MySQL 数据库中查找对应的接码数据 (替代了原版 require('config.php'))
     $pdo = Db::get();
-    $stmt = $pdo->prepare("SELECT v.*, p.host, p.port, p.user, p.pass, p.match_sender, c.match_keywords 
-                           FROM verification_data v 
-                           LEFT JOIN phonenumbers p ON v.phonenumber = p.phonenumber 
-                           LEFT JOIN classifications c ON v.category = c.id 
-                           WHERE v.code = ?");
-    $stmt->execute([$code]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    // 获取后台配置的全接字符
+    $stmt_admin = $pdo->query("SELECT global_prefix FROM admin_users LIMIT 1");
+    $admin_data = $stmt_admin->fetch(PDO::FETCH_ASSOC);
+    $global_prefix = $admin_data['global_prefix'] ?? '';
+
+    $is_global_fetch = false;
+    $row = null;
+
+    // 核心拦截：如果设置了全接字符，并且当前链接请求是以该字符开头的
+    if (!empty($global_prefix) && strpos($code, $global_prefix) === 0) {
+        $phone_to_check = substr($code, strlen($global_prefix)); // 提取电话号
+        $stmt_phone = $pdo->prepare("SELECT * FROM phonenumbers WHERE phonenumber = ?");
+        $stmt_phone->execute([$phone_to_check]);
+        $phone_data = $stmt_phone->fetch(PDO::FETCH_ASSOC);
+        
+        if ($phone_data) {
+            $is_global_fetch = true;
+            $row = $phone_data;
+            // 自动补全空字段以兼容系统后续的常规接码逻辑（跳过关键词与过期校验）
+            $row['match_keywords'] = ''; 
+            $row['releasedate'] = ''; 
+            $row['expirationtime'] = '';
+            $row['is_expired'] = 0;
+        }
+    }
+
+    // 如果不是全接收请求，则按原逻辑去 verification_data 查询固定编码
+    if (!$is_global_fetch) {
+        $stmt = $pdo->prepare("SELECT v.*, p.host, p.port, p.user, p.pass, p.match_sender, c.match_keywords 
+                               FROM verification_data v 
+                               LEFT JOIN phonenumbers p ON v.phonenumber = p.phonenumber 
+                               LEFT JOIN classifications c ON v.category = c.id 
+                               WHERE v.code = ?");
+        $stmt->execute([$code]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
 
     if (!$row) throw new Exception('查询码错误！！！');
 
