@@ -189,7 +189,12 @@ if (isset($_SESSION['bulk_add_success_details'])) {
                                 <td class="releasedate-cell" data-sort-value="<?php echo htmlspecialchars(implode(', ', $data['releasedate'] ?? [])); ?>"><?php echo htmlspecialchars(implode(', ', $data['releasedate'] ?? [])); ?></td>
                                 <td class="expirationtime-cell" data-sort-value="<?php echo $daysToAdd; ?>"><?php echo htmlspecialchars(implode(', ', $data['expirationtime'] ?? [])); ?></td>
                                 <td class="time-left-cell" data-expiration="<?php echo $expirationTimestamp; ?>"></td>
-                                <td class="combination-cell"><?php echo htmlspecialchars(implode(', ', $data['combination'] ?? [])); ?></td>
+                                <td class="combination-cell no-copy">
+                                    <?php $jump_url = htmlspecialchars(rtrim($_SESSION['domain'] ?? '', '/') . '/' . $code); ?>
+                                    <span><?php echo htmlspecialchars(implode(', ', $data['combination'] ?? [])); ?></span>
+                                    <i class="far fa-copy" style="cursor: pointer; color: #409EFF; margin-left: 8px;" onclick="copyTextToClipboard(this.previousElementSibling.textContent, this.parentElement)" title="点击复制"></i>
+                                    <a href="<?php echo $jump_url; ?>" target="_blank" style="color: #67C23A; margin-left: 8px;" title="新窗口打开收信页面"><i class="fas fa-external-link-alt"></i></a>
+                                </td>
                                 <td class="no-copy action-cell">
                                     <button type="button" class="edit-btn" data-code="<?php echo htmlspecialchars($code); ?>" data-category="<?php echo htmlspecialchars($data['category'] ?? ''); ?>">编辑</button>
                                     <a href="admin.php?action=verification_code_delete&code=<?php echo urlencode($code); ?>&category=<?php echo urlencode($data['category']); ?>" onclick="return confirm('确定要删除这条数据吗？');" class="delete-btn">删除</a>
