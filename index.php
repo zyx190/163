@@ -50,7 +50,11 @@ try {
 
     // 2. 从 MySQL 数据库中查找对应的接码数据 (替代了原版 require('config.php'))
     $pdo = Db::get();
-    $stmt = $pdo->prepare("SELECT * FROM verification_data WHERE code = ?");
+    $stmt = $pdo->prepare("SELECT v.*, p.host, p.port, p.user, p.pass, p.match_sender, c.match_keywords 
+                           FROM verification_data v 
+                           LEFT JOIN phonenumbers p ON v.phonenumber = p.phonenumber 
+                           LEFT JOIN classifications c ON v.category = c.id 
+                           WHERE v.code = ?");
     $stmt->execute([$code]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
