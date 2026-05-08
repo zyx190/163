@@ -1,5 +1,5 @@
 <?php
-// admin.php (基于 MySQL 架构重构版 - Part 1)
+// admin.php (基于 MySQL 架构重构版 - 最终修正版)
 
 session_start();
 
@@ -24,9 +24,9 @@ $allowedActions = [
     'verification_code_list' => 'views/verification_code.php',
     'expired_phones' => 'views/expired_phones.php',
     'code_manager' => 'views/code_manager.php',
-    'system_settings' => 'views/system_settings.php', // [新增] 系统设置页面
+    'system_settings' => 'views/system_settings.php', 
     
-    // 以下为纯逻辑动作，没有独立视图
+    // 纯逻辑动作
     'system_settings_save' => null, 
     'used_codes_save' => null,
     'used_codes_delete' => null,
@@ -41,14 +41,10 @@ $allowedActions = [
     'phonenumber_bulk_delete' => null,
     'phonenumber_bulk_save' => null,
     'verification_code_save' => null,
-    'verification_code_sync' => null,
     'verification_code_bulk_delete' => null,
-    'verification_code_bulk_update' => null,
     'verification_code_edit' => null,
     'verification_code_delete' => null,
     'verification_code_bulk_save' => null,
-    'verification_code_bulk_move' => null,
-    'verification_code_move_expired' => null,
     'expired_phones_bulk_delete' => null,
     'expired_phones_delete' => null,
     'expired_phones_edit' => null,
@@ -65,12 +61,12 @@ $error_message = '';
 $verificationData = [];
 
 // =========================================================================
-// 核心数据函数区 (将原 JSON 逻辑完美映射为 MySQL，确保前端试图0修改兼容)
+// 核心数据函数区 
 // =========================================================================
 
 function getUsedCodesData() {
     $stmt = Db::get()->query("SELECT code FROM used_codes");
-    return $stmt->fetchAll(PDO::FETCH_COLUMN); // 返回如 ['CODE1', 'CODE2']
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
 }
 
 function generate_unique_verification_code() {
@@ -83,12 +79,10 @@ function generate_unique_verification_code() {
         for ($i = 0; $i < 10; $i++) {
             $random_code .= $characters[rand(0, $charactersLength - 1)];
         }
-        // 查库排重
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM used_codes WHERE code = ?");
         $stmt->execute([$random_code]);
     } while ($stmt->fetchColumn() > 0);
 
-    // 自动入库
     $stmt = $pdo->prepare("INSERT INTO used_codes (code) VALUES (?)");
     $stmt->execute([$random_code]);
     return $random_code;
@@ -98,7 +92,6 @@ function getClassificationData() {
     $stmt = Db::get()->query("SELECT * FROM classifications");
     $data = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        // 将以逗号分割的字符串还原为前端需要的数组格式
         $row['match_keywords'] = empty($row['match_keywords']) ? [] : explode(',', $row['match_keywords']);
         $data[] = $row;
     }
@@ -110,8 +103,13 @@ function getPhoneNumberData() {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+// 【修正】完美关联获取数据
 function getAllVerificationData() {
-    $stmt = Db::get()->query("SELECT * FROM verification_data WHERE is_expired = 0");
+    $stmt = Db::get()->query("SELECT v.*, p.host, p.port, p.user, p.pass, p.match_sender, c.match_keywords 
+                              FROM verification_data v 
+                              LEFT JOIN phonenumbers p ON v.phonenumber = p.phonenumber 
+                              LEFT JOIN classifications c ON v.category = c.id 
+                              WHERE v.is_expired = 0");
     $data = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $code = $row['code'];
@@ -125,14 +123,19 @@ function getAllVerificationData() {
             'match_sender' => [$row['match_sender']],
             'releasedate' => [$row['releasedate']],
             'expirationtime' => [$row['expirationtime']],
-            'combination' => [$row['combination']]
+            'combination' => [$row['phonenumber'] . '---' . ($_SESSION['domain'] ?? '') . $code]
         ];
     }
     return $data;
 }
 
+// 【修正】获取过期数据同样使用 LEFT JOIN
 function getExpiredPhonesData() {
-    $stmt = Db::get()->query("SELECT * FROM verification_data WHERE is_expired = 1");
+    $stmt = Db::get()->query("SELECT v.*, p.host, p.port, p.user, p.pass, p.match_sender, c.match_keywords 
+                              FROM verification_data v 
+                              LEFT JOIN phonenumbers p ON v.phonenumber = p.phonenumber 
+                              LEFT JOIN classifications c ON v.category = c.id 
+                              WHERE v.is_expired = 1");
     $data = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $code = $row['code'];
@@ -146,18 +149,17 @@ function getExpiredPhonesData() {
             'match_sender' => [$row['match_sender']],
             'releasedate' => [$row['releasedate']],
             'expirationtime' => [$row['expirationtime']],
-            'combination' => [$row['combination']]
+            'combination' => [$row['phonenumber'] . '---' . ($_SESSION['domain'] ?? '') . $code]
         ];
     }
     return $data;
 }
 
+// 【修正】使用 phonenumber 查重而不是已被删除的 combination
 function isPhoneNumberInCategory($phoneNumber, $categoryName, $excludeCode = null) {
-    // 检查是否存在相同号码且同分类的数据（包括已过期和未过期）
-    $sql = "SELECT COUNT(*) FROM verification_data WHERE category = ? AND combination LIKE ? AND code != ?";
+    $sql = "SELECT COUNT(*) FROM verification_data WHERE category = ? AND phonenumber = ? AND code != ?";
     $stmt = Db::get()->prepare($sql);
-    $likeStr = $phoneNumber . '---%';
-    $stmt->execute([$categoryName, $likeStr, $excludeCode ?? '']);
+    $stmt->execute([$categoryName, $phoneNumber, $excludeCode ?? '']);
     return $stmt->fetchColumn() > 0;
 }
 
@@ -165,7 +167,6 @@ function getAllVerificationCodes() {
     return getUsedCodesData();
 }
 
-// 登出与登录拦截逻辑保持不变...
 if ($action === 'logout') {
     Auth::doLogout();
     header('Location: admin.php?action=login');
@@ -173,7 +174,7 @@ if ($action === 'logout') {
 }
 
 // =========================================================================
-// 补充缺失的 login 登录验证逻辑 (替换掉您代码里的占位符)
+// 登录验证逻辑
 // =========================================================================
 if ($action === 'login') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -205,187 +206,22 @@ if ($action === 'login') {
     exit;
 }
 
-// =========================================================================
-// 接码管理的 批量添加、编辑、同步、一键更新 (放在动作处理区)
-// =========================================================================
-
-// 批量添加接码数据
-if ($action === 'verification_code_bulk_save') {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['bulk_data']) && !empty($_POST['bulk_category_name'])) {
-        $lines = explode("\n", $_POST['bulk_data']);
-        $categoryName = $_POST['bulk_category_name'];
-        $daysToExpire = (float)($_POST['bulk_days_to_expire'] ?? 0);
-        
-        $pdo = Db::get();
-        // 获取分类
-        $stmt = $pdo->prepare("SELECT * FROM classifications WHERE id = ?");
-        $stmt->execute([$categoryName]);
-        $matchedClassification = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$matchedClassification) {
-            $_SESSION['error_message'] = '选择的分类不存在。';
-            header('Location: admin.php?action=verification_code');
-            exit;
-        }
-
-        $successCount = 0; $errorMessages = []; $failedLines = []; $successful_combinations = [];
-
-        // 预查电话表
-        $phones = [];
-        $stmt = $pdo->query("SELECT * FROM phonenumbers");
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { $phones[$row['phonenumber']] = $row; }
-
-        $pdo->beginTransaction();
-        try {
-            $insertStmt = $pdo->prepare("INSERT INTO verification_data (code, category, host, port, user, pass, match_sender, match_keywords, releasedate, expirationtime, combination, is_expired) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)");
-            $codeStmt = $pdo->prepare("INSERT IGNORE INTO used_codes (code) VALUES (?)");
-            $checkCodeStmt = $pdo->prepare("SELECT COUNT(*) FROM used_codes WHERE code = ?");
-
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (empty($line)) continue;
-                
-                $parts = preg_split('/\s*---\s*|\s+/', $line, -1, PREG_SPLIT_NO_EMPTY);
-                $phonenumber = trim($parts[0]);
-                $verification_code = isset($parts[1]) ? trim($parts[1]) : '';
-
-                if (empty($verification_code)) {
-                    // 使用内置函数生成
-                    $verification_code = generate_unique_verification_code();
-                } else {
-                    $checkCodeStmt->execute([$verification_code]);
-                    if ($checkCodeStmt->fetchColumn() > 0) {
-                        $errorMessages[] = "查询码已存在: {$verification_code}"; $failedLines[] = $line; continue;
-                    }
-                }
-
-                if (isPhoneNumberInCategory($phonenumber, $categoryName)) { 
-                    $errorMessages[] = "电话({$phonenumber})在分类({$categoryName})已存在"; $failedLines[] = $line; continue; 
-                }
-                
-                if (!isset($phones[$phonenumber])) { 
-                    $errorMessages[] = "电话号不存在: {$phonenumber}"; $failedLines[] = $line; continue; 
-                }
-                
-                $matchedPhoneNumber = $phones[$phonenumber];
-                $domain = $_SESSION['domain'] ?? '';
-                $combination = $phonenumber . '---' . $domain . $verification_code;
-                $releasedate = (new DateTime())->format('Y-m-d H:i:s');
-                $expirationtime = $daysToExpire . '天';
-
-                $insertStmt->execute([
-                    $verification_code, $categoryName, $matchedPhoneNumber['host'], $matchedPhoneNumber['port'] ?? '995',
-                    $matchedPhoneNumber['user'], $matchedPhoneNumber['pass'], $matchedPhoneNumber['match_sender'],
-                    $matchedClassification['match_keywords'], $releasedate, $expirationtime, $combination
-                ]);
-                $codeStmt->execute([$verification_code]);
-                
-                $successful_combinations[] = $combination; 
-                $successCount++;
-            }
-            $pdo->commit();
-            if ($successCount > 0) $_SESSION['bulk_add_success_details'] = $successful_combinations;
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            $errorMessages[] = "数据库错误: " . $e->getMessage();
-        }
-
-        if (!empty($errorMessages)) {
-            $_SESSION['error_message'] = "部分数据添加失败：<br>" . implode("<br>", $errorMessages);
-            $_SESSION['bulk_data_to_retain'] = implode("\n", $failedLines);
-        } else {
-            $_SESSION['success_message'] = "成功批量添加 {$successCount} 条数据。";
-        }
-    }
-    header('Location: admin.php?action=verification_code');
-    exit;
-}
-
-// 编辑单条接码数据
-if ($action === 'verification_code_edit') {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['original_code']) && !empty($_POST['phonenumber']) && !empty($_POST['category_name']) && !empty($_POST['verification_code'])) {
-        $newCode = trim($_POST['verification_code']);
-        $originalCode = $_POST['original_code'];
-        $newCategory = $_POST['category_name'];
-        $newPhoneNumber = $_POST['phonenumber'];
-        $pdo = Db::get();
-
-        if ($originalCode !== $newCode) {
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM used_codes WHERE code = ?");
-            $stmt->execute([$newCode]);
-            if ($stmt->fetchColumn() > 0) {
-                $_SESSION['error_message'] = '新查询码已存在，请重新填写。';
-                header('Location: admin.php?action=verification_code');
-                exit;
-            }
-        }
-        
-        if (isPhoneNumberInCategory($newPhoneNumber, $newCategory, $originalCode)) {
-            $_SESSION['error_message'] = '该电话在同分类中已存在。';
-            header('Location: admin.php?action=verification_code');
-            exit;
-        }
-
-        $stmt = $pdo->prepare("SELECT * FROM phonenumbers WHERE phonenumber = ?");
-        $stmt->execute([$newPhoneNumber]);
-        $matchedPhoneNumber = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        $stmt = $pdo->prepare("SELECT match_keywords FROM classifications WHERE id = ?");
-        $stmt->execute([$newCategory]);
-        $match_keywords = $stmt->fetchColumn();
-
-        if ($matchedPhoneNumber) {
-            $domain = $_SESSION['domain'] ?? '';
-            $combination = $newPhoneNumber . '---' . $domain . $newCode;
-            $expirationtime = ((float)($_POST['days_to_expire'] ?? 0)) . '天';
-            $releasedate = (new DateTime())->format('Y-m-d H:i:s');
-
-            $stmt = $pdo->prepare("UPDATE verification_data SET code=?, category=?, host=?, port=?, user=?, pass=?, match_sender=?, match_keywords=?, releasedate=?, expirationtime=?, combination=? WHERE code=?");
-            $stmt->execute([
-                $newCode, $newCategory, $matchedPhoneNumber['host'], $matchedPhoneNumber['port'] ?? '995',
-                $matchedPhoneNumber['user'], $matchedPhoneNumber['pass'], $matchedPhoneNumber['match_sender'],
-                $match_keywords, $releasedate, $expirationtime, $combination, $originalCode
-            ]);
-            
-            if ($originalCode !== $newCode) {
-                $pdo->prepare("DELETE FROM used_codes WHERE code = ?")->execute([$originalCode]);
-                $pdo->prepare("INSERT IGNORE INTO used_codes (code) VALUES (?)")->execute([$newCode]);
-            }
-            $_SESSION['success_message'] = '已成功编辑该条数据。';
-        }
-    }
-    header('Location: admin.php?action=verification_code');
-    exit;
-}
-
-// 恢复过期电话
-if ($action === 'expired_phones_edit') {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['original_code'])) {
-        // ... (与 verification_code_edit 几乎一致，只需要在 UPDATE 语句中加上 is_expired = 0)
-        $pdo = Db::get();
-        $stmt = $pdo->prepare("UPDATE verification_data SET is_expired = 0, releasedate=?, expirationtime=? WHERE code=?");
-        $stmt->execute([(new DateTime())->format('Y-m-d H:i:s'), ((float)($_POST['days_to_expire'] ?? 0)) . '天', $_POST['original_code']]);
-        $_SESSION['success_message'] = '已成功恢复该数据到正常接码列表中。';
-    }
-    header('Location: admin.php?action=expired_phones');
-    exit;
-}
 if (!Auth::checkLogin()) {
     header('Location: admin.php?action=login');
     exit;
 }
+
 // =========================================================================
-// 动作处理区：系统设置、电话、分类的管理 (基于 MySQL)
+// 系统设置、分类、电话的基础管理 
 // =========================================================================
 
-// [新增] 系统设置保存逻辑
 if ($action === 'system_settings_save') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $new_username = trim($_POST['username']);
         $new_password = $_POST['new_password'];
         $confirm_password = $_POST['confirm_password'];
         $new_domain = trim($_POST['domain'] ?? '');
-        $user_id = $_SESSION['user_id']; // 从登录 session 中获取当前管理员ID
+        $user_id = $_SESSION['user_id']; 
 
         if (empty($new_username)) {
             $_SESSION['error_message'] = "账号名不能为空！";
@@ -403,7 +239,7 @@ if ($action === 'system_settings_save') {
                     $stmt->execute([$new_username, $new_domain, $user_id]);
                 }
                 $_SESSION['domain'] = $new_domain;
-                $_SESSION['username'] = $new_username; // 更新session中的名字
+                $_SESSION['username'] = $new_username; 
                 $_SESSION['success_message'] = "系统设置修改成功！";
             } catch (PDOException $e) {
                 $_SESSION['error_message'] = "修改失败，可能是账号名已存在。";
@@ -413,8 +249,6 @@ if ($action === 'system_settings_save') {
     header('Location: admin.php?action=system_settings');
     exit;
 }
-
-// ---------------- 分类管理 (Classifications) ----------------
 
 if ($action === 'classification_save') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['category_name']) && !empty($_POST['match_keywords'])) {
@@ -465,8 +299,6 @@ if ($action === 'classification_edit') {
     header('Location: admin.php?action=classification');
     exit;
 }
-
-// ---------------- 电话管理 (Phone Numbers) ----------------
 
 if ($action === 'phonenumber_save') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['phonenumber'])) {
@@ -541,7 +373,6 @@ if ($action === 'phonenumber_bulk_save') {
     exit;
 }
 
-// ---------------- 查询码管理 (Used Codes) ----------------
 if ($action === 'used_codes_save') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['verification_code'])) {
         $newCode = trim($_POST['verification_code']);
@@ -577,19 +408,21 @@ if ($action === 'used_codes_bulk_delete') {
     header('Location: admin.php?action=code_manager');
     exit;
 }
+
 // =========================================================================
-// 核心接码管理 (Verification Code) 逻辑 (完全重写为 MySQL)
+// 核心接码管理操作区
 // =========================================================================
 
+// 【修正】单条保存：只存关联键
 if ($action === 'verification_code_save') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['phonenumber']) && !empty($_POST['category_name']) && isset($_POST['days_to_expire'])) {
         $verification_code = trim($_POST['verification_code']);
+        $pdo = Db::get();
         
         if (empty($verification_code)) {
             $verification_code = generate_unique_verification_code();
         } else {
-            // 查库看码是否已存在
-            $stmt = Db::get()->prepare("SELECT COUNT(*) FROM used_codes WHERE code = ?");
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM used_codes WHERE code = ?");
             $stmt->execute([$verification_code]);
             if ($stmt->fetchColumn() > 0) {
                 $_SESSION['error_message'] = '自定义查询码已存在，请重新填写。';
@@ -599,56 +432,169 @@ if ($action === 'verification_code_save') {
         }
 
         if (isPhoneNumberInCategory($_POST['phonenumber'], $_POST['category_name'])) {
-            $_SESSION['error_message'] = '该电话('.htmlspecialchars($_POST['phonenumber']).')在同分类('.htmlspecialchars($_POST['category_name']).')已存在。';
+            $_SESSION['error_message'] = '该电话('.htmlspecialchars($_POST['phonenumber']).')在同分类已存在。';
             header('Location: admin.php?action=verification_code');
             exit;
         }
 
-        $pdo = Db::get();
-        // 获取电话详情
-        $stmt = $pdo->prepare("SELECT * FROM phonenumbers WHERE phonenumber = ?");
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM phonenumbers WHERE phonenumber = ?");
         $stmt->execute([$_POST['phonenumber']]);
-        $matchedPhoneNumber = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if (!$matchedPhoneNumber) {
-            $_SESSION['error_message'] = '暂无(' . htmlspecialchars($_POST['phonenumber']) . ')这个电话号的资料';
+        if ($stmt->fetchColumn() == 0) {
+            $_SESSION['error_message'] = '暂无该电话号资料，请先在电话管理添加。';
             header('Location: admin.php?action=verification_code');
             exit;
         }
 
-        // 获取分类详情
-        $stmt = $pdo->prepare("SELECT * FROM classifications WHERE id = ?");
-        $stmt->execute([$_POST['category_name']]);
-        $matchedClassification = $stmt->fetch(PDO::FETCH_ASSOC);
+        $releasedate = (new DateTime())->format('Y-m-d H:i:s');
+        $expirationtime = ((float)$_POST['days_to_expire']) . '天';
 
-        if ($matchedClassification) {
-            $domain = $_SESSION['domain'] ?? '';
-            $combination = $matchedPhoneNumber['phonenumber'] . '---' . $domain . $verification_code;
-            $releasedate = (new DateTime())->format('Y-m-d H:i:s');
-            $expirationtime = ((float)$_POST['days_to_expire']) . '天';
+        try {
+            $pdo->beginTransaction();
+            // 仅插入轻量字段
+            $stmt = $pdo->prepare("INSERT INTO verification_data (code, phonenumber, category, releasedate, expirationtime, is_expired) VALUES (?, ?, ?, ?, ?, 0)");
+            $stmt->execute([
+                $verification_code, $_POST['phonenumber'], $_POST['category_name'], 
+                $releasedate, $expirationtime
+            ]);
+            
+            $stmt = $pdo->prepare("INSERT IGNORE INTO used_codes (code) VALUES (?)");
+            $stmt->execute([$verification_code]);
+            
+            $pdo->commit();
+            $_SESSION['success_message'] = '接码数据添加成功！';
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            $_SESSION['error_message'] = '添加失败：' . $e->getMessage();
+        }
+    }
+    header('Location: admin.php?action=verification_code');
+    exit;
+}
 
-            try {
-                $pdo->beginTransaction();
-                // 插入接码数据
-                $stmt = $pdo->prepare("INSERT INTO verification_data (code, category, host, port, user, pass, match_sender, match_keywords, releasedate, expirationtime, combination, is_expired) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)");
-                $stmt->execute([
-                    $verification_code, $_POST['category_name'], $matchedPhoneNumber['host'], 
-                    $matchedPhoneNumber['port'] ?? '995', $matchedPhoneNumber['user'], $matchedPhoneNumber['pass'], 
-                    $matchedPhoneNumber['match_sender'], $matchedClassification['match_keywords'], 
-                    $releasedate, $expirationtime, $combination
+// 【修正】批量保存：只存关联键
+if ($action === 'verification_code_bulk_save') {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['bulk_data']) && !empty($_POST['bulk_category_name'])) {
+        $lines = explode("\n", $_POST['bulk_data']);
+        $categoryName = $_POST['bulk_category_name'];
+        $daysToExpire = (float)($_POST['bulk_days_to_expire'] ?? 0);
+        $pdo = Db::get();
+
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM classifications WHERE id = ?");
+        $stmt->execute([$categoryName]);
+        if ($stmt->fetchColumn() == 0) {
+            $_SESSION['error_message'] = '选择的分类不存在。';
+            header('Location: admin.php?action=verification_code');
+            exit;
+        }
+
+        $successCount = 0; $errorMessages = []; $failedLines = []; $successful_combinations = [];
+
+        $phones = [];
+        $stmt = $pdo->query("SELECT phonenumber FROM phonenumbers");
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { $phones[$row['phonenumber']] = true; }
+
+        $pdo->beginTransaction();
+        try {
+            $insertStmt = $pdo->prepare("INSERT INTO verification_data (code, phonenumber, category, releasedate, expirationtime, is_expired) VALUES (?, ?, ?, ?, ?, 0)");
+            $codeStmt = $pdo->prepare("INSERT IGNORE INTO used_codes (code) VALUES (?)");
+            $checkCodeStmt = $pdo->prepare("SELECT COUNT(*) FROM used_codes WHERE code = ?");
+
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (empty($line)) continue;
+                
+                $parts = preg_split('/\s*---\s*|\s+/', $line, -1, PREG_SPLIT_NO_EMPTY);
+                $phonenumber = trim($parts[0]);
+                $verification_code = isset($parts[1]) ? trim($parts[1]) : '';
+
+                if (empty($verification_code)) {
+                    $verification_code = generate_unique_verification_code();
+                } else {
+                    $checkCodeStmt->execute([$verification_code]);
+                    if ($checkCodeStmt->fetchColumn() > 0) {
+                        $errorMessages[] = "查询码已存在: {$verification_code}"; $failedLines[] = $line; continue;
+                    }
+                }
+
+                if (isPhoneNumberInCategory($phonenumber, $categoryName)) { 
+                    $errorMessages[] = "电话({$phonenumber})在同分类已存在"; $failedLines[] = $line; continue; 
+                }
+                
+                if (!isset($phones[$phonenumber])) { 
+                    $errorMessages[] = "电话号不存在于电话库: {$phonenumber}"; $failedLines[] = $line; continue; 
+                }
+                
+                $domain = $_SESSION['domain'] ?? '';
+                $combination = $phonenumber . '---' . $domain . $verification_code; // 仅用于前端弹窗展示
+                $releasedate = (new DateTime())->format('Y-m-d H:i:s');
+                $expirationtime = $daysToExpire . '天';
+
+                $insertStmt->execute([
+                    $verification_code, $phonenumber, $categoryName, 
+                    $releasedate, $expirationtime
                 ]);
+                $codeStmt->execute([$verification_code]);
                 
-                // 记录已使用码
-                $stmt = $pdo->prepare("INSERT IGNORE INTO used_codes (code) VALUES (?)");
-                $stmt->execute([$verification_code]);
-                
-                $pdo->commit();
-                $_SESSION['success_message'] = '接码数据添加成功！';
-            } catch (Exception $e) {
-                $pdo->rollBack();
-                $_SESSION['error_message'] = '添加失败：' . $e->getMessage();
+                $successful_combinations[] = $combination; 
+                $successCount++;
+            }
+            $pdo->commit();
+            if ($successCount > 0) $_SESSION['bulk_add_success_details'] = $successful_combinations;
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            $errorMessages[] = "数据库错误: " . $e->getMessage();
+        }
+
+        if (!empty($errorMessages)) {
+            $_SESSION['error_message'] = "部分数据添加失败：<br>" . implode("<br>", $errorMessages);
+            $_SESSION['bulk_data_to_retain'] = implode("\n", $failedLines);
+        } else {
+            $_SESSION['success_message'] = "成功批量添加 {$successCount} 条数据。";
+        }
+    }
+    header('Location: admin.php?action=verification_code');
+    exit;
+}
+
+// 【修正】编辑接码：只更新关联字段
+if ($action === 'verification_code_edit') {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['original_code']) && !empty($_POST['phonenumber']) && !empty($_POST['category_name']) && !empty($_POST['verification_code'])) {
+        $newCode = trim($_POST['verification_code']);
+        $originalCode = $_POST['original_code'];
+        $newCategory = $_POST['category_name'];
+        $newPhoneNumber = $_POST['phonenumber'];
+        $pdo = Db::get();
+
+        if ($originalCode !== $newCode) {
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM used_codes WHERE code = ?");
+            $stmt->execute([$newCode]);
+            if ($stmt->fetchColumn() > 0) {
+                $_SESSION['error_message'] = '新查询码已存在，请重新填写。';
+                header('Location: admin.php?action=verification_code');
+                exit;
             }
         }
+        
+        if (isPhoneNumberInCategory($newPhoneNumber, $newCategory, $originalCode)) {
+            $_SESSION['error_message'] = '该电话在同分类中已存在。';
+            header('Location: admin.php?action=verification_code');
+            exit;
+        }
+
+        $expirationtime = ((float)($_POST['days_to_expire'] ?? 0)) . '天';
+        $releasedate = (new DateTime())->format('Y-m-d H:i:s');
+
+        $stmt = $pdo->prepare("UPDATE verification_data SET code=?, phonenumber=?, category=?, releasedate=?, expirationtime=? WHERE code=?");
+        $stmt->execute([
+            $newCode, $newPhoneNumber, $newCategory, 
+            $releasedate, $expirationtime, $originalCode
+        ]);
+        
+        if ($originalCode !== $newCode) {
+            $pdo->prepare("DELETE FROM used_codes WHERE code = ?")->execute([$originalCode]);
+            $pdo->prepare("INSERT IGNORE INTO used_codes (code) VALUES (?)")->execute([$newCode]);
+        }
+        $_SESSION['success_message'] = '已成功编辑该条数据。';
     }
     header('Location: admin.php?action=verification_code');
     exit;
@@ -675,114 +621,14 @@ if ($action === 'verification_code_bulk_delete') {
     exit;
 }
 
-// =========================================================================
-// 接码数据的高级同步与更新操作
-// =========================================================================
-// 2. 一键同步所有接码数据（当修改了电话密码或分类关键字后，一键同步到已生成的接码数据中）
-if ($action === 'verification_code_sync') {
-    $pdo = Db::get();
-    $phones = [];
-    $stmt = $pdo->query("SELECT * FROM phonenumbers");
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { $phones[$row['phonenumber']] = $row; }
-
-    $classes = [];
-    $stmt = $pdo->query("SELECT * FROM classifications");
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { $classes[$row['id']] = $row; }
-
-    $stmt = $pdo->query("SELECT code, combination, category FROM verification_data");
-    $updateStmt = $pdo->prepare("UPDATE verification_data SET host=?, port=?, user=?, pass=?, match_sender=?, match_keywords=? WHERE code=?");
-
-    $pdo->beginTransaction();
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $phone = explode('---', $row['combination'])[0] ?? '';
-        $cat = $row['category'];
-        
-        if (isset($phones[$phone])) {
-            $p = $phones[$phone];
-            $c = $classes[$cat] ?? ['match_keywords' => ''];
-            $updateStmt->execute([
-                $p['host'], $p['port'] ?? '995', $p['user'], $p['pass'], $p['match_sender'],
-                $c['match_keywords'], $row['code']
-            ]);
-        }
-    }
-    $pdo->commit();
-    $_SESSION['success_message'] = '已成功同步所有接码数据。';
-    header('Location: admin.php?action=verification_code');
-    exit;
-}
-
-// 3. 批量更新选中的接码数据（同上，但只针对勾选的数据）
-if ($action === 'verification_code_bulk_update') {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['selected_items']) && is_array($_POST['selected_items'])) {
+if ($action === 'expired_phones_edit') {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['original_code'])) {
         $pdo = Db::get();
-        $phones = [];
-        $stmt = $pdo->query("SELECT * FROM phonenumbers");
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { $phones[$row['phonenumber']] = $row; }
-
-        $classes = [];
-        $stmt = $pdo->query("SELECT * FROM classifications");
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { $classes[$row['id']] = $row; }
-
-        $inQuery = implode(',', array_fill(0, count($_POST['selected_items']), '?'));
-        $stmt = $pdo->prepare("SELECT code, combination, category FROM verification_data WHERE code IN ($inQuery)");
-        $stmt->execute($_POST['selected_items']);
-
-        $updateStmt = $pdo->prepare("UPDATE verification_data SET host=?, port=?, user=?, pass=?, match_sender=?, match_keywords=? WHERE code=?");
-
-        $pdo->beginTransaction();
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $phone = explode('---', $row['combination'])[0] ?? '';
-            $cat = $row['category'];
-            if (isset($phones[$phone])) {
-                $p = $phones[$phone];
-                $c = $classes[$cat] ?? ['match_keywords' => ''];
-                $updateStmt->execute([
-                    $p['host'], $p['port'] ?? '995', $p['user'], $p['pass'], $p['match_sender'],
-                    $c['match_keywords'], $row['code']
-                ]);
-            }
-        }
-        $pdo->commit();
-        $_SESSION['success_message'] = '已成功批量更新选定的数据。';
+        $stmt = $pdo->prepare("UPDATE verification_data SET is_expired = 0, releasedate=?, expirationtime=? WHERE code=?");
+        $stmt->execute([(new DateTime())->format('Y-m-d H:i:s'), ((float)($_POST['days_to_expire'] ?? 0)) . '天', $_POST['original_code']]);
+        $_SESSION['success_message'] = '已成功恢复该数据到正常接码列表中。';
     }
-    header('Location: admin.php?action=verification_code');
-    exit;
-}
-
-if ($action === 'verification_code_move_expired') {
-    $pdo = Db::get();
-    $stmt = $pdo->query("SELECT code, releasedate, expirationtime FROM verification_data WHERE is_expired = 0");
-    $movedCount = 0;
-    
-    $updateStmt = $pdo->prepare("UPDATE verification_data SET is_expired = 1 WHERE code = ?");
-    
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $releaseDate = $row['releasedate'];
-        preg_match('/^(\d+(\.\d+)?)天$/', $row['expirationtime'] ?? '0天', $matches);
-        $daysToAdd = (float)($matches[1] ?? 0);
-        $expirationTimestamp = $releaseDate ? (new DateTime($releaseDate))->getTimestamp() + ($daysToAdd * 24 * 3600) : 0;
-        
-        if (time() > $expirationTimestamp) {
-            $updateStmt->execute([$row['code']]);
-            $movedCount++;
-        }
-    }
-    
-    $_SESSION['success_message'] = "已成功移动 {$movedCount} 条过期数据到过期列表。";
-    header('Location: admin.php?action=verification_code');
-    exit;
-}
-
-if ($action === 'verification_code_bulk_move') {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['selected_items']) && is_array($_POST['selected_items'])) {
-        $inQuery = implode(',', array_fill(0, count($_POST['selected_items']), '?'));
-        $stmt = Db::get()->prepare("UPDATE verification_data SET is_expired = 1 WHERE code IN ($inQuery)");
-        $stmt->execute($_POST['selected_items']);
-        $movedCount = $stmt->rowCount();
-        $_SESSION['success_message'] = "已成功移动 {$movedCount} 条数据到过期列表。";
-    }
-    header('Location: admin.php?action=verification_code');
+    header('Location: admin.php?action=expired_phones');
     exit;
 }
 
@@ -807,21 +653,22 @@ if ($action === 'expired_phones_delete') {
     exit;
 }
 
-// 导出相关功能
+// 【修正】导出组合时，动态拼接
 if ($action === 'export_selected_combinations' || $action === 'export_all_combinations') {
     $pdo = Db::get();
     $output = [];
     if ($action === 'export_selected_combinations' && isset($_POST['selected_items']) && is_array($_POST['selected_items'])) {
         $inQuery = implode(',', array_fill(0, count($_POST['selected_items']), '?'));
-        $stmt = $pdo->prepare("SELECT combination FROM verification_data WHERE code IN ($inQuery)");
+        $stmt = $pdo->prepare("SELECT code, phonenumber FROM verification_data WHERE code IN ($inQuery)");
         $stmt->execute($_POST['selected_items']);
     } else {
-        $stmt = $pdo->query("SELECT combination FROM verification_data");
+        $stmt = $pdo->query("SELECT code, phonenumber FROM verification_data");
     }
     
+    $domain = $_SESSION['domain'] ?? '';
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        if (!empty($row['combination'])) {
-            $output[] = $row['combination'];
+        if (!empty($row['phonenumber']) && !empty($row['code'])) {
+            $output[] = $row['phonenumber'] . '---' . $domain . $row['code'];
         }
     }
     header('Content-Type: text/plain');
@@ -829,7 +676,7 @@ if ($action === 'export_selected_combinations' || $action === 'export_all_combin
     echo implode("\n", $output);
     exit;
 }
-// 导出电话管理数据
+
 if ($action === 'export_phonenumbers' || $action === 'export_selected_phonenumbers') {
     $pdo = Db::get();
     $output = [];
@@ -842,14 +689,8 @@ if ($action === 'export_phonenumbers' || $action === 'export_selected_phonenumbe
     }
     
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        // 以空格分隔，兼容你的批量添加格式
         $output[] = sprintf("%s %s %s %s %s %s", 
-            $row['host'], 
-            $row['port'], 
-            $row['user'], 
-            $row['pass'], 
-            $row['match_sender'], 
-            $row['phonenumber']
+            $row['host'], $row['port'], $row['user'], $row['pass'], $row['match_sender'], $row['phonenumber']
         );
     }
     header('Content-Type: text/plain; charset=utf-8');
@@ -857,11 +698,11 @@ if ($action === 'export_phonenumbers' || $action === 'export_selected_phonenumbe
     echo implode("\n", $output);
     exit;
 }
+
 // =========================================================================
-// 视图与数据组装逻辑 (兼容前端布局)
+// 视图分发逻辑区
 // =========================================================================
 
-// 获取仪表盘统计数据
 function getDashboardData() {
     $pdo = Db::get();
     $dashboardData = [];
@@ -870,13 +711,11 @@ function getDashboardData() {
     $dashboardData['total_added_codes'] = $pdo->query("SELECT COUNT(*) FROM verification_data WHERE is_expired = 0")->fetchColumn();
     $dashboardData['total_expired_codes'] = $pdo->query("SELECT COUNT(*) FROM verification_data WHERE is_expired = 1")->fetchColumn();
     
-    // 按分类统计有效接码
     $stmt = $pdo->query("SELECT category, COUNT(*) as cnt FROM verification_data WHERE is_expired = 0 GROUP BY category");
     $addedData = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { $addedData[$row['category']] = $row['cnt']; }
     $dashboardData['added_codes_by_category'] = $addedData;
 
-    // 按分类统计过期接码
     $stmt = $pdo->query("SELECT category, COUNT(*) as cnt FROM verification_data WHERE is_expired = 1 GROUP BY category");
     $expiredDataByCategory = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { $expiredDataByCategory[$row['category']] = $row['cnt']; }
@@ -885,7 +724,6 @@ function getDashboardData() {
     return $dashboardData;
 }
 
-// 页面数据分发逻辑
 if ($action === 'code_manager') {
     $allCodes = getUsedCodesData();
     $search_term = trim($_GET['search_term'] ?? '');
@@ -898,34 +736,58 @@ if ($action === 'code_manager') {
     $dashboardData = getDashboardData();
 } elseif ($action === 'verification_code') {
     $search_term = trim($_GET['search_term'] ?? '');
-    if (!empty($search_term)) {
-        $stmt = Db::get()->prepare("SELECT * FROM verification_data WHERE code LIKE ? OR combination LIKE ? OR category LIKE ?");
-        $likeTerm = "%{$search_term}%";
-        $stmt->execute([$likeTerm, $likeTerm, $likeTerm]);
-        
-        $filteredData = [];
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $code = $row['code'];
-            $filteredData[$code] = [
-                'category' => $row['category'],
-                'host' => $row['host'],
-                'port' => $row['port'],
-                'user' => $row['user'],
-                'pass' => $row['pass'],
-                'match_keywords' => empty($row['match_keywords']) ? [] : explode(',', $row['match_keywords']),
-                'match_sender' => [$row['match_sender']],
-                'releasedate' => [$row['releasedate']],
-                'expirationtime' => [$row['expirationtime']],
-                'combination' => [$row['combination']],
-                'is_expired' => (bool)$row['is_expired']
-            ];
-        }
-        $verificationData = $filteredData;
+    $filter_days = $_GET['filter_days'] ?? ''; 
+
+    $sql = "SELECT v.*, p.host, p.port, p.user, p.pass, p.match_sender, c.match_keywords 
+            FROM verification_data v 
+            LEFT JOIN phonenumbers p ON v.phonenumber = p.phonenumber 
+            LEFT JOIN classifications c ON v.category = c.id 
+            WHERE 1=1";
+    $params = [];
+
+    if ($filter_days === 'expired') {
+        $sql .= " AND v.is_expired = 1";
     } else {
-        $verificationData = getAllVerificationData();
+        $sql .= " AND v.is_expired = 0"; 
+        if ($filter_days !== '') {
+            $sql .= " AND v.expirationtime = ?";
+            $params[] = $filter_days . '天';
+        }
+    }
+
+    if (!empty($search_term)) {
+        $sql .= " AND (v.code LIKE ? OR v.phonenumber LIKE ? OR v.category LIKE ?)";
+        $likeTerm = "%{$search_term}%";
+        array_push($params, $likeTerm, $likeTerm, $likeTerm);
+    }
+
+    $stmt = Db::get()->prepare($sql);
+    $stmt->execute($params);
+    
+    $verificationData = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $code = $row['code'];
+        $verificationData[$code] = [
+            'category' => $row['category'],
+            'host' => $row['host'],
+            'port' => $row['port'],
+            'user' => $row['user'],
+            'pass' => $row['pass'],
+            'match_keywords' => empty($row['match_keywords']) ? [] : explode(',', $row['match_keywords']),
+            'match_sender' => [$row['match_sender']],
+            'releasedate' => [$row['releasedate']],
+            'expirationtime' => [$row['expirationtime']],
+            'combination' => [$row['phonenumber'] . '---' . ($_SESSION['domain'] ?? '') . $code],
+            'is_expired' => (bool)$row['is_expired']
+        ];
     }
 } elseif ($action === 'verification_code_list' && isset($_GET['category'])) {
-    $stmt = Db::get()->prepare("SELECT * FROM verification_data WHERE category = ? AND is_expired = 0");
+    // 【修正】带出所有关联数据
+    $stmt = Db::get()->prepare("SELECT v.*, p.host, p.port, p.user, p.pass, p.match_sender, c.match_keywords 
+                                FROM verification_data v 
+                                LEFT JOIN phonenumbers p ON v.phonenumber = p.phonenumber 
+                                LEFT JOIN classifications c ON v.category = c.id 
+                                WHERE v.category = ? AND v.is_expired = 0");
     $stmt->execute([$_GET['category']]);
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $code = $row['code'];
@@ -939,7 +801,7 @@ if ($action === 'code_manager') {
             'match_sender' => [$row['match_sender']],
             'releasedate' => [$row['releasedate']],
             'expirationtime' => [$row['expirationtime']],
-            'combination' => [$row['combination']]
+            'combination' => [$row['phonenumber'] . '---' . ($_SESSION['domain'] ?? '') . $code]
         ];
     }
 } elseif ($action === 'expired_phones') {
@@ -953,6 +815,5 @@ if (array_key_exists($action, $allowedActions)) {
     exit;
 }
 
-// 最后渲染全局视图
 require 'views/layout.php';
 ?>
