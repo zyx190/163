@@ -104,7 +104,7 @@ if (isset($_SESSION['bulk_add_success_details'])) {
         </div>
 
         <div class="batch-add-right">
-            <textarea name="bulk_data" class="full-width-textarea" style="flex: 1; min-height: 180px;" placeholder="格式：&lt;code&gt;电话号 [查询码]&lt;/code&gt; (每行一条，分隔符可用---、空格或Tab)
+            <textarea name="bulk_data" class="full-width-textarea" style="flex: 1; min-height: 150px;" placeholder="格式：&lt;code&gt;电话号 [查询码]&lt;/code&gt; (每行一条，分隔符可用---、空格或Tab)
 示例:
 1234567890 XYZ123
 9876543210"></textarea>
@@ -192,8 +192,8 @@ if (isset($_SESSION['bulk_add_success_details'])) {
                                 <td class="combination-cell no-copy">
                                     <?php $jump_url = htmlspecialchars(rtrim($_SESSION['domain'] ?? '', '/') . '/' . $code); ?>
                                     <span><?php echo htmlspecialchars(implode(', ', $data['combination'] ?? [])); ?></span>
-                                    <i class="far fa-copy" style="cursor: pointer; color: #409EFF; margin-left: 8px;" onclick="copyTextToClipboard(this.previousElementSibling.textContent, this.parentElement)" title="点击复制"></i>
-                                    <a href="<?php echo $jump_url; ?>" target="_blank" style="color: #67C23A; margin-left: 8px;" title="新窗口打开收信页面"><i class="fas fa-external-link-alt"></i></a>
+                                    <i class="far fa-copy" style="cursor: pointer; color: #409EFF; margin-left: 10px; font-size: 18px;" onclick="copyTextToClipboard(this.previousElementSibling.textContent, this.parentElement)" title="点击复制"></i>
+                                    <a href="<?php echo $jump_url; ?>" target="_blank" style="color: #67C23A; margin-left: 10px; font-size: 17px;" title="新窗口打开收信页面"><i class="fas fa-external-link-alt"></i></a>
                                 </td>
                                 <td class="no-copy action-cell">
                                     <button type="button" class="edit-btn" data-code="<?php echo htmlspecialchars($code); ?>" data-category="<?php echo htmlspecialchars($data['category'] ?? ''); ?>">编辑</button>
